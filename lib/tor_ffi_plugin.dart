@@ -18,11 +18,7 @@ class CouldntBootstrapDirectory implements Exception {
   CouldntBootstrapDirectory({this.rustError});
 }
 
-enum TorStatus {
-  on,
-  starting,
-  off;
-}
+enum TorStatus { on, starting, off }
 
 class Tor {
   /// Private constructor for the Tor class.
@@ -88,9 +84,10 @@ class Tor {
       final tor = await Isolate.run(() async {
         // Start the Tor service.
         final tor = bindings.tor_start(
-            newPort,
-            stateDir.path.toNativeUtf8() as Pointer<Char>,
-            cacheDir.path.toNativeUtf8() as Pointer<Char>);
+          newPort,
+          stateDir.path.toNativeUtf8() as Pointer<Char>,
+          cacheDir.path.toNativeUtf8() as Pointer<Char>,
+        );
 
         // Throw an exception if the Tor service fails to start.
         if (tor.client == nullptr) {
@@ -142,15 +139,19 @@ class Tor {
   }
 
   /// Stop the proxy and release the native client handle.
-  stop() async {
+  Future<void> stop() async {
     bindings.tor_proxy_stop(_proxyPtr);
     _proxyPtr = nullptr;
 
     bindings.tor_client_free(_clientPtr);
     _clientPtr = nullptr;
+
+    _bootstrapped = false;
+    _proxyPort = null;
+    _status = TorStatus.off;
   }
 
-  setClientDormant(bool dormant) async {
+  Future<void> setClientDormant(bool dormant) async {
     if (_clientPtr == nullptr || status == TorStatus.off) {
       throw ClientNotActive();
     }
@@ -187,8 +188,10 @@ class Tor {
   // }
 
   static void throwRustException() {
-    String rustError =
-        bindings.tor_last_error_message().cast<Utf8>().toDartString();
+    String rustError = bindings
+        .tor_last_error_message()
+        .cast<Utf8>()
+        .toDartString();
 
     throw _getRustException(rustError);
   }
